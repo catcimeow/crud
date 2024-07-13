@@ -1,5 +1,4 @@
 <?php
-
 namespace App\Http\Middleware;
 
 use Closure;
@@ -14,12 +13,16 @@ class LoginCheck
      * @param  \Closure(\Illuminate\Http\Request): (\Symfony\Component\HttpFoundation\Response)  $next
      */
     public function handle(Request $request, Closure $next){
-        if (!session()->has('loggedInUser') && ($request->path() != '/' && $request->path() != '/register')) {
+        $path = $request->path();
+        $loggedIn = session()->has('loggedInUser');
+
+        if (!$loggedIn && !in_array($path, ['/', 'register'])) {
             return redirect('/');
-        } elseif (session()->has('loggedInUser') && ($request->path() == '/' || $request->path() == '/register')) {
+        } elseif ($loggedIn && in_array($path, ['/', 'register'])) {
             return back();
         }
 
         return $next($request);
+    }
 }
-}
+

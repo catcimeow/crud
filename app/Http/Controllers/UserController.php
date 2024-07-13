@@ -9,7 +9,6 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Storage;
 
 class UserController extends Controller
 {
@@ -20,25 +19,10 @@ class UserController extends Controller
 
     public function register()
     {
-        if(session()->has('loggedInUser')){
-            return redirect('/profile');
-        } else {
         return view('auth.register');
-        }
     }
 
-    public function forgot()
-    {
-        return view('auth.forgot');
-    }
-
-    public function reset()
-    {
-        return view('auth.reset');
-    }
-
-    // Handle register user ajax request
-    public function saveUser(Request $request)
+    public function registerUser(Request $request)
     {
         $validator = Validator::make($request->all(), [
             'email' => 'required|email|unique:users',
@@ -65,13 +49,11 @@ class UserController extends Controller
         } else {
             DB::beginTransaction();
             try {
-                // Handle image upload
                 $profileImagePath = null;
                 if ($request->hasFile('image')) {
                     $profileImagePath = $request->file('image')->store('profile_images', 'public');
                 }
 
-                // Create the user with isAdmin set to 0
                 $user = $this->createUser($request, $profileImagePath);
                 $buyer = $this->createBuyer($request, $user->id);
 
@@ -92,19 +74,17 @@ class UserController extends Controller
         }
     }
 
-    // Example method to create user record
     private function createUser($request, $profileImagePath)
     {
         return User::create([
             'email' => $request->email,
             'password' => Hash::make($request->password),
-            'profile_image_path' => $profileImagePath, // Adjust as per your form
-            'is_admin' => 0, // Ensure isAdmin is set to 0 for regular users
-            'is_activated' => 1, // You can set activated status as per your logic
+            'profile_image_path' => $profileImagePath,
+            'is_admin' => 0,
+            'is_activated' => 1,
         ]);
     }
 
-    // Example method to create related buyer record
     private function createBuyer($request, $userId)
     {
         return Buyer::create([
@@ -115,11 +95,10 @@ class UserController extends Controller
             'barangay' => $request->barangay,
             'city' => $request->city,
             'landmark' => $request->landmark,
-            'id_user' => $userId, // Ensure the column matches 'user_id'
+            'id_user' => $userId,
         ]);
     }
 
-    // Handle login user ajax request
     public function loginUser(Request $request)
     {
         $validator = Validator::make($request->all(), [
@@ -129,17 +108,18 @@ class UserController extends Controller
 
         if ($validator->fails()) {
             return response()->json([
-                'status' => 400,
+                'status' => 422,
                 'message' => $validator->errors()
             ]);
         } else {
             $user = User::where('email', $request->email)->first();
             if ($user) {
                 if (Hash::check($request->password, $user->password)) {
-                    $request->session()->put('loggedInUser', $user->id);
+                    $token = $user->createToken('authToken')->plainTextToken;
                     return response()->json([
                         'status' => 200,
-                        'message' => 'Login Successful'
+                        'message' => 'Login Successful',
+                        'token' => $token
                     ]);
                 } else {
                     return response()->json([
@@ -156,16 +136,20 @@ class UserController extends Controller
         }
     }
 
-    //profile page
-    public function profile(){
-        return view ('profile');
+    public function profile()
+    {
+        // Add your profile logic here
+        return view('profile');
     }
 
-    //logout method
-    public function logout(){
-        if (session()->has('loggedInUser')){
-            session()->pull('loggedInUser');
-            return redirect('/');
-        }
-}
+    public function logout(Request $request)
+    {
+        // Revoke the token that was used to authenticate the current request
+        $request->user()->tokens()->delete();
+    
+        return response()->json([
+            'message' => 'Logged out successfully.'
+        ]);
+    }
+    
 }
